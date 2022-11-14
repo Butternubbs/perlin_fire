@@ -1,0 +1,29 @@
+<!-- Basic example of texture mapping, no lighting. -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Basic texture</title>
+</head>
+
+<body>
+	<canvas id="theCanvas" width="400" height="400">
+    Please use a browser that supports "canvas"
+    </canvas>
+<p>
+Key controls:
+<ul>
+
+<li> m, M - toggle mag filter (linear/nearest)
+<li> n, N - toggle min filter (linear/nearest)
+<li> s, S - toggle s wrapping (repeat/clamp)
+<li> t, T - toggle t wrapping (repeat/clamp)
+</ul>
+
+
+		<script src="../util/cs336util.js"></script>
+		<script src="fire.js"></script>
+		<script>window.onload = main</script>
+</body>
+</html>
