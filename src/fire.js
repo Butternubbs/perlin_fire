@@ -40,14 +40,19 @@
 
 // vertex shader
 const vshaderSource = `
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
 attribute vec4 a_Position;
 attribute vec2 a_TexCoord;
+
 varying vec2 fTexCoord;
+
 void main()
 {
-  // pass through so the value gets interpolated
   fTexCoord = a_TexCoord;
-  gl_Position = a_Position;
+  gl_Position = projection * view * model * a_Position;
 }
 `;
 
@@ -78,7 +83,7 @@ void main()
   else if (state == 3)
     c = color.a; // * 16.0;
   //this gross line should probably be replaced with a power function and a uniform that can be set by the user
-  gl_FragColor = vec4(fireColor.r, fireColor.g, fireColor.b, min(1.0, color.a*color.a*color.a*color.a*(fireColor.a+fireColor.a+fireColor.a)));
+  gl_FragColor = vec4(fireColor.r, fireColor.g, fireColor.b, min(1.0, color.a*color.a*color.a*color.a*color.a*(fireColor.a+fireColor.a+fireColor.a+fireColor.a)));
 
 #endif
 
@@ -99,13 +104,14 @@ void main()
 }
 `;
 
-
+var model = new THREE.Matrix4();
+var camera = new Camera(30, 1.5);
 // edit to configure the texture (which is created around line 410 using
 // the createNoiseTexture function below.)
 var size = 128;
 var frequency = 4;
 var octaves = 4;
-var fireSpeed = 0.05;
+var fireSpeed = 0.02;
 var time = 0;
 
 var noiseMaker = new ClassicalNoise();
@@ -141,7 +147,7 @@ function createNoiseTexture(size, frequency, octaves, time)
       octaves = 4;
       for (let k = 0; k < octaves; ++k)
       {
-        nn += noiseMaker.noise(x * f + (time*fireSpeed), y * f, 0) / f;
+        nn += noiseMaker.noise(x * f + (time*fireSpeed*f), y * f, time/40.0) / f;
 
         // values appear to be about +/- .27, so scale appropriately
         // to store as a color value in [0, 255]
@@ -161,9 +167,11 @@ function createNoiseTexture(size, frequency, octaves, time)
 // Raw data for some point positions - this will be a square, consisting
 // of two triangles.  We provide two values per vertex for the x and y coordinates
 // (z will be zero by default).
-var numPoints = 6;
+
 
 var numRects = 10;
+
+var numPoints = numRects*6;
 
 var vertices = [];
 for(let i = 0; i < numRects; i++){
@@ -180,6 +188,60 @@ for(let i = 0; i < numRects; i++){
 
 // most straightforward way to choose texture coordinates
 var texCoords = new Float32Array([
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
+0.5, 0.0,
+1.0, 0.0,
+1.0, 1.0,
+0.5, 0.0,
+1.0, 1.0,
+0.5, 1.0,
 0.5, 0.0,
 1.0, 0.0,
 1.0, 1.0,
@@ -296,7 +358,7 @@ function draw()
   // get the index for the a_Position attribute defined in the vertex shader
   var texCoordIndex = gl.getAttribLocation(shader, 'a_TexCoord');
   if (texCoordIndex < 0) {
-    console.log('Failed to get the storage location of a_Position');
+    console.log('Failed to get the storage location of a_TexCoord');
     return;
   }
 
@@ -325,7 +387,16 @@ function draw()
   // that we pass in 3 when setting the uniform for the sampler
   gl.activeTexture(gl.TEXTURE0);
 
-  var loc = gl.getUniformLocation(shader, "sampler");
+  var projection = camera.getProjection();
+  var view = camera.getView();
+  var loc = gl.getUniformLocation(shader, "model");
+  gl.uniformMatrix4fv(loc, false, model.elements);
+  loc = gl.getUniformLocation(shader, "view");
+  gl.uniformMatrix4fv(loc, false, view.elements);
+  loc = gl.getUniformLocation(shader, "projection");
+  gl.uniformMatrix4fv(loc, false, projection.elements);
+
+  loc = gl.getUniformLocation(shader, "sampler");
 
   // sampler value in shader is set to index for texture unit
   gl.uniform1i(loc, textureUnit);
@@ -387,10 +458,11 @@ async function main(image) {
   var animate = function() {
 	draw();
   time++;
+  image = createNoiseTexture(size, frequency, octaves, time);
+  textureHandle = createAndLoadTexture(image);
+  model = new THREE.Matrix4().makeRotationY(toRadians(0.2)).multiply(model);
 	// request that the browser calls animate() again "as soon as it can"
     requestAnimationFrame(animate);
-    image = createNoiseTexture(size, frequency, octaves, time);
-    textureHandle = createAndLoadTexture(image);
   };
 
   // start drawing!
