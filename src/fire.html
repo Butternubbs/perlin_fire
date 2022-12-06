@@ -8,21 +8,16 @@
 </head>
 
 <body>
-	<canvas id="theCanvas" width="400" height="400">
+	<canvas id="theCanvas" width="600" height="600">
     Please use a browser that supports "canvas"
     </canvas>
-<p>
-Key controls:
-<ul>
 
-<li> m, M - toggle mag filter (linear/nearest)
-<li> n, N - toggle min filter (linear/nearest)
-<li> s, S - toggle s wrapping (repeat/clamp)
-<li> t, T - toggle t wrapping (repeat/clamp)
-</ul>
+<script src="../three/three.js"></script>
+<script src="../util/cs336util.js"></script>
+<script src="../hierarchy/CS336Object.js"></script>
+<script src="../hierarchy/Camera.js"></script>
+    <script src="perlin_noise_classical.js"></script>
 
-
-		<script src="../util/cs336util.js"></script>
 		<script src="fire.js"></script>
 		<script>window.onload = main</script>
 </body>
