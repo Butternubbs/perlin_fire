@@ -56,12 +56,15 @@ const fshaderSource = `
 precision mediump float;
 uniform int state;
 uniform sampler2D sampler;
+uniform sampler2D firesampler;
 varying vec2 fTexCoord;
 void main()
 {
   // sample from the texture at the interpolated texture coordinate,
   // and use the value directly as the surface color
   vec4 color = texture2D(sampler, fTexCoord);
+  vec4 fireColor = texture2D(firesampler, fTexCoord);
+  fireColor.a = min(1.0, (fireColor.r + fireColor.g + fireColor.b) / 3.0);
 
 #if 1
   // use a greyscale value in [0, 1], exaggerate contrast
@@ -74,8 +77,8 @@ void main()
     c = color.b; // * 8.0;
   else if (state == 3)
     c = color.a; // * 16.0;
-
-  gl_FragColor = vec4(c, c, c, 1.0);
+  //this gross line should probably be replaced with a power function and a uniform that can be set by the user
+  gl_FragColor = vec4(fireColor.r, fireColor.g, fireColor.b, min(1.0, color.a*color.a*color.a*color.a*(fireColor.a+fireColor.a+fireColor.a)));
 
 #endif
 
@@ -99,9 +102,11 @@ void main()
 
 // edit to configure the texture (which is created around line 410 using
 // the createNoiseTexture function below.)
-var size = 256;
+var size = 128;
 var frequency = 4;
-var octaves = 2;
+var octaves = 4;
+var fireSpeed = 0.05;
+var time = 0;
 
 var noiseMaker = new ClassicalNoise();
 
@@ -123,7 +128,6 @@ function createNoiseTexture(size, frequency, octaves, time)
   var imageData=context.createImageData(size, size);
   // The property 'data' will contain an array of int8
   var data=imageData.data;
-
   let delta = (1.0 / size);
   for (let i = 0; i < size; ++i)
   {
@@ -137,7 +141,7 @@ function createNoiseTexture(size, frequency, octaves, time)
       octaves = 4;
       for (let k = 0; k < octaves; ++k)
       {
-        nn += noiseMaker.noise(x * f, y * f + time, 0) / f;
+        nn += noiseMaker.noise(x * f + (time*fireSpeed), y * f, 0) / f;
 
         // values appear to be about +/- .27, so scale appropriately
         // to store as a color value in [0, 255]
@@ -159,24 +163,29 @@ function createNoiseTexture(size, frequency, octaves, time)
 // (z will be zero by default).
 var numPoints = 6;
 
- var vertices = new Float32Array([
-0.0, -0.5,
-0.5, -0.5,
-0.5, 0.5,
-0.0, -0.5,
-0.5, 0.5,
-0.0, 0.5
-]
-);
+var numRects = 10;
+
+var vertices = [];
+for(let i = 0; i < numRects; i++){
+  let degree = (360.0/numRects)*i
+  vertices.push(0.0, -0.5, 0.0);
+  vertices.push(0.5*Math.cos(toRadians(degree)), -0.5, -0.5*Math.sin(toRadians(degree)));
+  vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
+  vertices.push(0.0, -0.5, 0.0);
+  vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
+  vertices.push(0.0, 0.5, 0.0);
+}
+
+ var vertices = new Float32Array(vertices);
 
 // most straightforward way to choose texture coordinates
 var texCoords = new Float32Array([
-0.0, 0.0,
+0.5, 0.0,
 1.0, 0.0,
 1.0, 1.0,
-0.0, 0.0,
+0.5, 0.0,
 1.0, 1.0,
-0.0, 1.0,
+0.5, 1.0,
 ]);
 
 // A few global variables...
@@ -195,7 +204,10 @@ var shader;
 var textureHandle;
 var state = 0;
 
-var imageFilename = "../images/fireimg.png"
+var fireHandle;
+
+var imageFilename = "../images/firefull.png"
+
 
 //translate keypress events to strings
 //from http://javascript.info/tutorial/keyboard-events
@@ -274,9 +286,9 @@ function draw()
   gl.enableVertexAttribArray(positionIndex);
 
   // associate the data in the currently bound buffer with the a_position attribute
-  // (The '2' specifies there are 2 floats per vertex in the buffer.  Don't worry about
+  // (The '3' specifies there are 3 floats per vertex in the buffer.  Don't worry about
   // the last three args just yet.)
-  gl.vertexAttribPointer(positionIndex, 2, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(positionIndex, 3, gl.FLOAT, false, 0, 0);
 
   // bind the texture coordinate buffer
   gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
@@ -304,6 +316,10 @@ function draw()
   gl.activeTexture(gl.TEXTURE0 + textureUnit);
   gl.bindTexture(gl.TEXTURE_2D, textureHandle);
 
+  var fireUnit = 4;
+  gl.activeTexture(gl.TEXTURE0 + fireUnit);
+  gl.bindTexture(gl.TEXTURE_2D, fireHandle);
+
   // once we have the texture handle bound, we don't need 3
   // to be the active texture unit any longer - what matters is
   // that we pass in 3 when setting the uniform for the sampler
@@ -313,6 +329,9 @@ function draw()
 
   // sampler value in shader is set to index for texture unit
   gl.uniform1i(loc, textureUnit);
+
+  loc = gl.getUniformLocation(shader, "firesampler");
+  gl.uniform1i(loc, fireUnit);
 
   loc = gl.getUniformLocation(shader, "state");
   gl.uniform1i(loc, state);
@@ -344,6 +363,9 @@ async function main(image) {
   // get graphics context
   gl = getGraphicsContext("theCanvas");
 
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
   // load and compile the shader pair
   shader = createShaderProgram(gl, vshaderSource, fshaderSource);
 
@@ -352,10 +374,10 @@ async function main(image) {
   texCoordBuffer = createAndLoadBuffer(texCoords);
 
   // specify a fill color for clearing the framebuffer
-  gl.clearColor(0.0, 0.8, 0.8, 1.0);
+  gl.clearColor(0.0, 0.05, 0.1, 1.0);
 
   // create the noise texture
-  image = createNoiseTexture(size, frequency, octaves);
+  image = createNoiseTexture(size, frequency, octaves, time);
 
   // ask the GPU to create a texture object
   textureHandle = createAndLoadTexture(image);
@@ -364,9 +386,11 @@ async function main(image) {
   // define an animation loop
   var animate = function() {
 	draw();
-
+  time++;
 	// request that the browser calls animate() again "as soon as it can"
     requestAnimationFrame(animate);
+    image = createNoiseTexture(size, frequency, octaves, time);
+    textureHandle = createAndLoadTexture(image);
   };
 
   // start drawing!
