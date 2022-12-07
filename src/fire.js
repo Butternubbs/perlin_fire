@@ -454,14 +454,20 @@ async function main(image) {
   textureHandle = createAndLoadTexture(image);
   fireHandle = createAndLoadTexture(fire);
 
+  const freqInput = document.getElementById('frequency')
+  freqInput.addEventListener('change', event => {
+    frequency = Number(event.target.value)
+  })
+
   // define an animation loop
   var animate = function() {
-	draw();
-  time++;
-  image = createNoiseTexture(size, frequency, octaves, time);
-  textureHandle = createAndLoadTexture(image);
-  model = new THREE.Matrix4().makeRotationY(toRadians(0.2)).multiply(model);
-	// request that the browser calls animate() again "as soon as it can"
+
+    draw();
+    time++;
+    image = createNoiseTexture(size, frequency, octaves, time);
+    textureHandle = createAndLoadTexture(image);
+    model = new THREE.Matrix4().makeRotationY(toRadians(0.2)).multiply(model);
+    // request that the browser calls animate() again "as soon as it can"
     requestAnimationFrame(animate);
   };
 
