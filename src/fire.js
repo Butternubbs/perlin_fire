@@ -147,7 +147,7 @@ function createNoiseTexture(size, frequency, octaves, time)
       octaves = 4;
       for (let k = 0; k < octaves; ++k)
       {
-        nn += noiseMaker.noise(x * f + (time*fireSpeed*f), y * f, time/40.0) / f;
+        nn += noiseMaker.noise4(x * f + 0*(time*fireSpeed*f), y * f, 0, time/40.0) / f;
 
         // values appear to be about +/- .27, so scale appropriately
         // to store as a color value in [0, 255]
@@ -169,8 +169,7 @@ function createNoiseTexture(size, frequency, octaves, time)
 // (z will be zero by default).
 
 
-var numRects = 10;
-
+var numRects = 5;
 var numPoints = numRects*6;
 
 var vertices = [];
@@ -183,72 +182,18 @@ for(let i = 0; i < numRects; i++){
   vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
   vertices.push(0.0, 0.5, 0.0);
 }
+vertices = new Float32Array(vertices);
 
- var vertices = new Float32Array(vertices);
-
-// most straightforward way to choose texture coordinates
-var texCoords = new Float32Array([
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-0.5, 0.0,
-1.0, 0.0,
-1.0, 1.0,
-0.5, 0.0,
-1.0, 1.0,
-0.5, 1.0,
-]);
+var texCoords = [];
+for(let i = 0; i < numRects; i++){
+  texCoords.push(0.5, 0.0);
+  texCoords.push(1.0, 0.0);
+  texCoords.push(1.0, 1.0);
+  texCoords.push(0.5, 0.0);
+  texCoords.push(1.0, 1.0);
+  texCoords.push(0.5, 1.0);
+}
+texCoords = new Float32Array(texCoords);
 
 // A few global variables...
 
@@ -458,7 +403,6 @@ async function main(image) {
   freqInput.addEventListener('change', event => {
     frequency = Number(event.target.value)
   })
-
   // define an animation loop
   var animate = function() {
 
