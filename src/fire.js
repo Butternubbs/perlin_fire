@@ -46,12 +46,15 @@ uniform mat4 projection;
 
 attribute vec4 a_Position;
 attribute vec2 a_TexCoord;
+attribute vec2 a_noiseCoord;
 
 varying vec2 fTexCoord;
+varying vec2 fnoiseCoord;
 
 void main()
 {
   fTexCoord = a_TexCoord;
+  fnoiseCoord = a_noiseCoord;
   gl_Position = projection * view * model * a_Position;
 }
 `;
@@ -63,11 +66,12 @@ uniform int state;
 uniform sampler2D sampler;
 uniform sampler2D firesampler;
 varying vec2 fTexCoord;
+varying vec2 fnoiseCoord;
 void main()
 {
   // sample from the texture at the interpolated texture coordinate,
   // and use the value directly as the surface color
-  vec4 color = texture2D(sampler, fTexCoord);
+  vec4 color = texture2D(sampler, fnoiseCoord);
   vec4 fireColor = texture2D(firesampler, fTexCoord);
   fireColor.a = min(1.0, (fireColor.r + fireColor.g + fireColor.b) / 3.0);
 
@@ -109,10 +113,12 @@ var camera = new Camera(30, 1.5);
 // edit to configure the texture (which is created around line 410 using
 // the createNoiseTexture function below.)
 var size = 128;
-var frequency = 4;
+var frequency = 3;
 var octaves = 4;
-var fireSpeed = 0.02;
+var fireSpeed = 0.20;
 var time = 0;
+var numRects = 30;
+var numPoints = numRects*6;
 
 var noiseMaker = new ClassicalNoise();
 
@@ -131,33 +137,38 @@ function createNoiseTexture(size, frequency, octaves, time)
   // create an image programmatically by drawing to an offscreen html canvas
   //
   var context = canvas.getContext("2d");
-  var imageData=context.createImageData(size, size);
+  var imageData=context.createImageData(size, size*numRects);
   // The property 'data' will contain an array of int8
   var data=imageData.data;
   let delta = (1.0 / size);
-  for (let i = 0; i < size; ++i)
-  {
-    let x = i * delta;
-    for (let j = 0; j < size; ++j)
+  for(let r = 0; r < numRects; r++){
+    let degree = r*360.0/numRects;
+    for (let i = 0; i < size; ++i)
     {
-      let y = j * delta;
-      let base = i * size + j;
-      let nn = 0.0;
-      let f = frequency;
-      octaves = 4;
-      for (let k = 0; k < octaves; ++k)
+      let x = i * delta;
+      for (let j = 0; j < size; ++j)
       {
-        nn += noiseMaker.noise4(x * f + 0*(time*fireSpeed*f), y * f, 0, time/40.0) / f;
+        let y = j * delta;
+        let base = (r+i) * size + j;
+        let nn = 0.0;
+        let f = frequency;
+        octaves = 4;
+        for (let k = 0; k < octaves; ++k)
+        {
+          nn += noiseMaker.noise4((x * f + (time*fireSpeed*f))*Math.cos(toRadians(degree)),
+                                   y * f, 
+                                   x * f * Math.sin(toRadians(degree)),
+                                   time/40.0) / f;
+          // values appear to be about +/- .27, so scale appropriately
+          // to store as a color value in [0, 255]
+          let nnn = (nn + 0.5) * 256;
+          data[base * 4 + k] = nnn;
+          f *= 2;
+        }
 
-        // values appear to be about +/- .27, so scale appropriately
-        // to store as a color value in [0, 255]
-        let nnn = (nn + 0.5) * 256;
-        data[base * 4 + k] = nnn;
-        f *= 2;
-      }
-
-    } // j loop
-  } // i loop
+      } // j loop
+    } // i loop
+  } // r loop (rotation)
 
   context.putImageData(imageData, 0, 0); // at coords 0,0
   return canvas;
@@ -168,32 +179,39 @@ function createNoiseTexture(size, frequency, octaves, time)
 // of two triangles.  We provide two values per vertex for the x and y coordinates
 // (z will be zero by default).
 
-
-var numRects = 5;
-var numPoints = numRects*6;
-
 var vertices = [];
 for(let i = 0; i < numRects; i++){
   let degree = (360.0/numRects)*i
-  vertices.push(0.0, -0.5, 0.0);
+  vertices.push(-0.5*Math.cos(toRadians(degree)), -0.5, 0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), -0.5, -0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
-  vertices.push(0.0, -0.5, 0.0);
+  vertices.push(-0.5*Math.cos(toRadians(degree)), -0.5, 0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
-  vertices.push(0.0, 0.5, 0.0);
+  vertices.push(-0.5*Math.cos(toRadians(degree)), 0.5, 0.5*Math.sin(toRadians(degree)));
 }
 vertices = new Float32Array(vertices);
 
 var texCoords = [];
 for(let i = 0; i < numRects; i++){
-  texCoords.push(0.5, 0.0);
+  texCoords.push(0.0, 0.0);
   texCoords.push(1.0, 0.0);
   texCoords.push(1.0, 1.0);
-  texCoords.push(0.5, 0.0);
+  texCoords.push(0.0, 0.0);
   texCoords.push(1.0, 1.0);
-  texCoords.push(0.5, 1.0);
+  texCoords.push(0.0, 1.0);
 }
 texCoords = new Float32Array(texCoords);
+
+var noiseCoords = [];
+for(let i = 0; i < numRects; i++){
+  noiseCoords.push(0.0, i/numRects);
+  noiseCoords.push(1.0, i/numRects);
+  noiseCoords.push(1.0, (i+1.0)/numRects);
+  noiseCoords.push(0.0, i/numRects);
+  noiseCoords.push(1.0, (i+1.0)/numRects);
+  noiseCoords.push(0.0, (i+1.0)/numRects);
+}
+noiseCoords = new Float32Array(noiseCoords);
 
 // A few global variables...
 
@@ -203,6 +221,7 @@ var gl;
 // handle to a buffer on the GPU
 var vertexbuffer;
 var texCoordBuffer;
+var noiseBuffer;
 
 // handle to the compiled shader program on the GPU
 var shader;
@@ -315,6 +334,11 @@ function draw()
   // the last three args just yet.)
   gl.vertexAttribPointer(texCoordIndex, 2, gl.FLOAT, false, 0, 0);
 
+  gl.bindBuffer(gl.ARRAY_BUFFER, noiseBuffer);
+  var noiseIndex = gl.getAttribLocation(shader, 'a_noiseCoord');
+  gl.enableVertexAttribArray(noiseIndex);
+  gl.vertexAttribPointer(noiseIndex, 2, gl.FLOAT, false, 0, 0);
+
   // we can unbind the buffer now (not really necessary when there is only one buffer)
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
@@ -388,6 +412,7 @@ async function main(image) {
   // load the vertex data into GPU memory
   vertexbuffer = createAndLoadBuffer(vertices);
   texCoordBuffer = createAndLoadBuffer(texCoords);
+  noiseBuffer = createAndLoadBuffer(noiseCoords);
 
   // specify a fill color for clearing the framebuffer
   gl.clearColor(0.0, 0.05, 0.1, 1.0);
