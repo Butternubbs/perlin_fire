@@ -1,42 +1,7 @@
-
-// Basic example of loading an image as a texture and mapping it onto a
-// square. Edit the coordinates of the square or edit the texture coordinates
-// to experiment.  Image filename is given directly below.  Use the "1" and
-// "2" keys to switch from NEAREST to LINEAR magnification filter.
-//
-// For security reasons the browser restricts access to the local filesystem.
-// To run the example, open a command shell in any directory above your examples
-// and your teal book utilities, and run python -m SimpleHttpServer 2222
-// or python3 -m http.server
-// Then point your browser to http://localhost:2222 and navigate to the
-// example you want to run.  For alternatives see
-// https://github.com/mrdoob/three.js/wiki/How-to-run-things-locally
-//
-
-// <script id="vertexShader" type="x-shader/x-vertex">
-// attribute vec4 a_Position;
-// attribute vec2 a_TexCoord;
-// varying vec2 fTexCoord;
-// void main()
-// {
-//   // pass through so the value gets interpolated
-//   fTexCoord = a_TexCoord;
-//   gl_Position = a_Position;
-// }
-// </script>
-//
-// <script id="fragmentShader" type="x-shader/x-fragment">
-// precision mediump float;
-// uniform sampler2D sampler;
-// varying vec2 fTexCoord;
-// void main()
-// {
-//   // sample from the texture at the interpolated texture coordinate,
-//   // and use the value directly as the surface color
-//   vec4 color = texture2D(sampler, fTexCoord);
-//   gl_FragColor = color;
-// }
-// </script>
+/* Basic Perlin Fire implementation
+Authors: Alex Foster, Zeyu Yang
+Heavily adapted from code written by Steve Kautz
+*/
 
 // vertex shader
 const vshaderSource = `
@@ -45,15 +10,15 @@ uniform mat4 view;
 uniform mat4 projection;
 
 attribute vec4 a_Position;
-attribute vec2 a_TexCoord;
+attribute vec2 a_fireCoord;
 attribute vec2 a_noiseCoord;
 
-varying vec2 fTexCoord;
+varying vec2 ffireCoord;
 varying vec2 fnoiseCoord;
 
 void main()
 {
-  fTexCoord = a_TexCoord;
+  ffireCoord = a_fireCoord;
   fnoiseCoord = a_noiseCoord;
   gl_Position = projection * view * model * a_Position;
 }
@@ -62,48 +27,22 @@ void main()
 // fragment shader
 const fshaderSource = `
 precision mediump float;
-uniform int state;
-uniform sampler2D sampler;
+uniform sampler2D noisesampler;
 uniform sampler2D firesampler;
-varying vec2 fTexCoord;
+uniform float numRects;
+varying vec2 ffireCoord;
 varying vec2 fnoiseCoord;
 void main()
 {
   // sample from the texture at the interpolated texture coordinate,
   // and use the value directly as the surface color
-  vec4 color = texture2D(sampler, fnoiseCoord);
-  vec4 fireColor = texture2D(firesampler, fTexCoord);
-  fireColor.a = min(1.0, (fireColor.r + fireColor.g + fireColor.b) / 3.0);
+  vec4 color = texture2D(noisesampler, fnoiseCoord);
+  vec4 fireColor = texture2D(firesampler, ffireCoord);
+  //fireColor.a = min(1.0, (fireColor.r + fireColor.g + fireColor.b) / 3.0); //use this line for images with no alpha channel (kinda ugly)
 
-#if 1
-  // use a greyscale value in [0, 1], exaggerate contrast
-  float c = 0.0;
-  if (state == 0)
-    c = color.r; // * 2.0;
-  else if (state == 1)
-    c = color.g; // * 4.0;
-  else if (state == 2)
-    c = color.b; // * 8.0;
-  else if (state == 3)
-    c = color.a; // * 16.0;
-  //this gross line should probably be replaced with a power function and a uniform that can be set by the user
-  gl_FragColor = vec4(fireColor.r, fireColor.g, fireColor.b, min(1.0, color.a*color.a*color.a*color.a*color.a*(fireColor.a+fireColor.a+fireColor.a+fireColor.a)));
-
-#endif
-
-#if 0
-
-  // turbulence (absolute value of noise)
-
-  float fraction = color.r;  // 3.0;
-  fraction = abs((fraction - 0.5) * 3.0); // recenter and scale up
-    vec4 red = vec4(1.0, 0.0, 0.0, 1.0);
-    vec4 yellow = vec4(1.0, 1.0, 0.0, 1.0);
-    vec4 c = fraction * red + (1.0 - fraction) * yellow;
-    c.a = 1.0;
-    gl_FragColor = c;
-
-#endif
+  //gl_FragColor = vec4(color.r, color.g, color.b, color.a);
+  //gl_FragColor = fireColor;
+  gl_FragColor = vec4(fireColor.r, fireColor.g, fireColor.b, min(1.0, (fireColor.a - color.a))/numRects);
 
 }
 `;
@@ -112,12 +51,15 @@ var model = new THREE.Matrix4();
 var camera = new Camera(30, 1.5);
 // edit to configure the texture (which is created around line 410 using
 // the createNoiseTexture function below.)
-var size = 128;
-var frequency = 3;
+var size = 128; //noise sampling amount, higher values can run very slow with a lot of rects
+var frequency = 2;
 var octaves = 4;
-var fireSpeed = 0.20;
+var riseSpeed = 0.02;
+var turbSpeed = 0.005;
+
 var time = 0;
-var numRects = 30;
+var numRects = 1; //try a high sampling rate (128) with 1 rect for a realistic 2d effect,
+                   //or a lot of rects (30-60) with a low sampling rate (~16) for a 3d candle-like effect
 var numPoints = numRects*6;
 
 var noiseMaker = new ClassicalNoise();
@@ -142,7 +84,7 @@ function createNoiseTexture(size, frequency, octaves, time)
   var data=imageData.data;
   let delta = (1.0 / size);
   for(let r = 0; r < numRects; r++){
-    let degree = r*360.0/numRects;
+    let degree = r*180.0/numRects;
     for (let i = 0; i < size; ++i)
     {
       let x = i * delta;
@@ -155,10 +97,10 @@ function createNoiseTexture(size, frequency, octaves, time)
         octaves = 4;
         for (let k = 0; k < octaves; ++k)
         {
-          nn += noiseMaker.noise4((x * f + (time*fireSpeed*f))*Math.cos(toRadians(degree)),
+          nn += noiseMaker.noise4((x * f + (time*riseSpeed*f))*Math.cos(toRadians(degree)),
                                    y * f, 
-                                   x * f * Math.sin(toRadians(degree)),
-                                   time/40.0) / f;
+                                  (x * f + (time*riseSpeed*f))*Math.sin(toRadians(degree)),
+                                   time*turbSpeed) / f;
           // values appear to be about +/- .27, so scale appropriately
           // to store as a color value in [0, 255]
           let nnn = (nn + 0.5) * 256;
@@ -181,7 +123,7 @@ function createNoiseTexture(size, frequency, octaves, time)
 
 var vertices = [];
 for(let i = 0; i < numRects; i++){
-  let degree = (360.0/numRects)*i
+  let degree = (180.0/numRects)*i
   vertices.push(-0.5*Math.cos(toRadians(degree)), -0.5, 0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), -0.5, -0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
@@ -191,25 +133,25 @@ for(let i = 0; i < numRects; i++){
 }
 vertices = new Float32Array(vertices);
 
-var texCoords = [];
+var fireCoords = [];
 for(let i = 0; i < numRects; i++){
-  texCoords.push(0.0, 0.0);
-  texCoords.push(1.0, 0.0);
-  texCoords.push(1.0, 1.0);
-  texCoords.push(0.0, 0.0);
-  texCoords.push(1.0, 1.0);
-  texCoords.push(0.0, 1.0);
+  fireCoords.push(0.0, 0.0);
+  fireCoords.push(1.0, 0.0);
+  fireCoords.push(1.0, 1.0);
+  fireCoords.push(0.0, 0.0);
+  fireCoords.push(1.0, 1.0);
+  fireCoords.push(0.0, 1.0);
 }
-texCoords = new Float32Array(texCoords);
+fireCoords = new Float32Array(fireCoords);
 
 var noiseCoords = [];
 for(let i = 0; i < numRects; i++){
   noiseCoords.push(0.0, i/numRects);
   noiseCoords.push(1.0, i/numRects);
-  noiseCoords.push(1.0, (i+1.0)/numRects);
+  noiseCoords.push(1.0, (1.0+i)/numRects);
   noiseCoords.push(0.0, i/numRects);
-  noiseCoords.push(1.0, (i+1.0)/numRects);
-  noiseCoords.push(0.0, (i+1.0)/numRects);
+  noiseCoords.push(1.0, (1.0+i)/numRects);
+  noiseCoords.push(0.0, (1.0+i)/numRects);
 }
 noiseCoords = new Float32Array(noiseCoords);
 
@@ -220,7 +162,7 @@ var gl;
 
 // handle to a buffer on the GPU
 var vertexbuffer;
-var texCoordBuffer;
+var fireCoordBuffer;
 var noiseBuffer;
 
 // handle to the compiled shader program on the GPU
@@ -232,7 +174,7 @@ var state = 0;
 
 var fireHandle;
 
-var imageFilename = "../images/firefull.png"
+var imageFilename = "../images/firefullalpha4.png"
 
 
 //translate keypress events to strings
@@ -252,110 +194,22 @@ return null // special key
 function handleKeyPress(event)
 {
 var ch = getChar(event);
-
-switch(ch)
-{
-
-  case '0':
-    state = 0;
-    break;
-case '1':
-  state = 1;
-  break;
-case '2':
-  state = 2;
-  break;
-case '3':
-  state = 3;
-  break;
-  case '4':
-    state = 4;
-    break;
-    case '5':
-      state = 5;
-      break;
-      case '6':
-        state = 6;
-        break;
-        case '7':
-          state = 7;
-          break;
-
-
-  default:
-    return;
+camera.keyControl(ch);
 }
-}
-
 
 
 // code to actually render our geometry
 function draw()
 {
+
+  
   // clear the framebuffer
   gl.clear(gl.COLOR_BUFFER_BIT);
 
   // bind the shader
   gl.useProgram(shader);
 
-  // bind the vertex buffer
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexbuffer);
-
-  // get the index for the a_Position attribute defined in the vertex shader
-  var positionIndex = gl.getAttribLocation(shader, 'a_Position');
-  if (positionIndex < 0) {
-    console.log('Failed to get the storage location of a_Position');
-    return;
-  }
-
-  // "enable" the a_position attribute
-  gl.enableVertexAttribArray(positionIndex);
-
-  // associate the data in the currently bound buffer with the a_position attribute
-  // (The '3' specifies there are 3 floats per vertex in the buffer.  Don't worry about
-  // the last three args just yet.)
-  gl.vertexAttribPointer(positionIndex, 3, gl.FLOAT, false, 0, 0);
-
-  // bind the texture coordinate buffer
-  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-
-  // get the index for the a_Position attribute defined in the vertex shader
-  var texCoordIndex = gl.getAttribLocation(shader, 'a_TexCoord');
-  if (texCoordIndex < 0) {
-    console.log('Failed to get the storage location of a_TexCoord');
-    return;
-  }
-
-  // "enable" the a_position attribute
-  gl.enableVertexAttribArray(texCoordIndex);
-
-  // associate the data in the currently bound buffer with the a_position attribute
-  // (The '2' specifies there are 2 floats per vertex in the buffer.  Don't worry about
-  // the last three args just yet.)
-  gl.vertexAttribPointer(texCoordIndex, 2, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, noiseBuffer);
-  var noiseIndex = gl.getAttribLocation(shader, 'a_noiseCoord');
-  gl.enableVertexAttribArray(noiseIndex);
-  gl.vertexAttribPointer(noiseIndex, 2, gl.FLOAT, false, 0, 0);
-
-  // we can unbind the buffer now (not really necessary when there is only one buffer)
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
-
-  // need to choose a texture unit, then bind the texture to TEXTURE_2D for that unit
-  var textureUnit = 3;
-  gl.activeTexture(gl.TEXTURE0 + textureUnit);
-  gl.bindTexture(gl.TEXTURE_2D, textureHandle);
-
-  var fireUnit = 4;
-  gl.activeTexture(gl.TEXTURE0 + fireUnit);
-  gl.bindTexture(gl.TEXTURE_2D, fireHandle);
-
-  // once we have the texture handle bound, we don't need 3
-  // to be the active texture unit any longer - what matters is
-  // that we pass in 3 when setting the uniform for the sampler
-  gl.activeTexture(gl.TEXTURE0);
-
+  // model/view/projection matrices
   var projection = camera.getProjection();
   var view = camera.getView();
   var loc = gl.getUniformLocation(shader, "model");
@@ -365,17 +219,50 @@ function draw()
   loc = gl.getUniformLocation(shader, "projection");
   gl.uniformMatrix4fv(loc, false, projection.elements);
 
-  loc = gl.getUniformLocation(shader, "sampler");
+  // set up the vertex buffer
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexbuffer);
+  var positionIndex = gl.getAttribLocation(shader, 'a_Position');
+  if (positionIndex < 0) {
+    console.log('Failed to get the storage location of a_Position');
+    return;
+  }
+  gl.enableVertexAttribArray(positionIndex);
+  gl.vertexAttribPointer(positionIndex, 3, gl.FLOAT, false, 0, 0);
 
-  // sampler value in shader is set to index for texture unit
-  gl.uniform1i(loc, textureUnit);
+  // set up the fire texture coordinate buffer
+  gl.bindBuffer(gl.ARRAY_BUFFER, fireCoordBuffer);
+  var fireCoordIndex = gl.getAttribLocation(shader, 'a_fireCoord');
+  gl.enableVertexAttribArray(fireCoordIndex);
+  gl.vertexAttribPointer(fireCoordIndex, 2, gl.FLOAT, false, 0, 0);
 
+  // set up the noise coordinate buffer
+  gl.bindBuffer(gl.ARRAY_BUFFER, noiseBuffer);
+  var noiseIndex = gl.getAttribLocation(shader, 'a_noiseCoord');
+  gl.enableVertexAttribArray(noiseIndex);
+  gl.vertexAttribPointer(noiseIndex, 2, gl.FLOAT, false, 0, 0);
+
+  // we can unbind the buffer now
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+  // bind our textures to texture units
+  var noiseUnit = 3;
+  gl.activeTexture(gl.TEXTURE0 + noiseUnit);
+  gl.bindTexture(gl.TEXTURE_2D, noiseHandle);
+
+  var fireUnit = 4;
+  gl.activeTexture(gl.TEXTURE0 + fireUnit);
+  gl.bindTexture(gl.TEXTURE_2D, fireHandle);
+
+  //set up the noise texture sampler uniform
+  loc = gl.getUniformLocation(shader, "noisesampler");
+  gl.uniform1i(loc, noiseUnit);
+
+  // set up the fire texture sampler uniform
   loc = gl.getUniformLocation(shader, "firesampler");
   gl.uniform1i(loc, fireUnit);
 
-  loc = gl.getUniformLocation(shader, "state");
-  gl.uniform1i(loc, state);
-
+  loc = gl.getUniformLocation(shader, "numRects");
+  gl.uniform1f(loc, numRects);
 
   // draw, specifying the type of primitive to assemble from the vertices
   gl.drawArrays(gl.TRIANGLES, 0, numPoints);
@@ -411,17 +298,17 @@ async function main(image) {
 
   // load the vertex data into GPU memory
   vertexbuffer = createAndLoadBuffer(vertices);
-  texCoordBuffer = createAndLoadBuffer(texCoords);
+  fireCoordBuffer = createAndLoadBuffer(fireCoords);
   noiseBuffer = createAndLoadBuffer(noiseCoords);
 
   // specify a fill color for clearing the framebuffer
   gl.clearColor(0.0, 0.05, 0.1, 1.0);
 
   // create the noise texture
-  image = createNoiseTexture(size, frequency, octaves, time);
+  noise = createNoiseTexture(size, frequency, octaves, time);
 
   // ask the GPU to create a texture object
-  textureHandle = createAndLoadTexture(image);
+  noiseHandle = createAndLoadTexture(noise);
   fireHandle = createAndLoadTexture(fire);
 
   const freqInput = document.getElementById('frequency')
@@ -433,9 +320,9 @@ async function main(image) {
 
     draw();
     time++;
-    image = createNoiseTexture(size, frequency, octaves, time);
-    textureHandle = createAndLoadTexture(image);
-    model = new THREE.Matrix4().makeRotationY(toRadians(0.2)).multiply(model);
+    noise = createNoiseTexture(size, frequency, octaves, time);
+    noiseHandle = createAndLoadTexture(noise);
+    //model = new THREE.Matrix4().makeRotationY(toRadians(0.2)).multiply(model);
     // request that the browser calls animate() again "as soon as it can"
     requestAnimationFrame(animate);
   };
