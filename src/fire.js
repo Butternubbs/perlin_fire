@@ -403,6 +403,14 @@ async function main(image) {
   freqInput.addEventListener('change', event => {
     frequency = Number(event.target.value)
   })
+  const fireSpeedDom = document.getElementById('fireSpeed')
+  fireSpeedDom.addEventListener('change', event => {
+    fireSpeed = Number(event.target.value)
+  })
+  const octavesInput = document.getElementById('octaves')
+  octavesInput.addEventListener('change', event => {
+    octaves = Number(event.target.value)
+  })
   // define an animation loop
   var animate = function() {
 
