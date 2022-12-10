@@ -51,14 +51,14 @@ var model = new THREE.Matrix4();
 var camera = new Camera(30, 1.5);
 // edit to configure the texture (which is created around line 410 using
 // the createNoiseTexture function below.)
-var size = 128; //noise sampling amount, higher values can run very slow with a lot of rects
+var size = 32; //noise sampling amount, higher values can run very slow with a lot of rects
 var frequency = 2;
 var octaves = 4;
 var riseSpeed = 0.02;
-var turbSpeed = 0.005;
+var turbSpeed = 0.05;
 
 var time = 0;
-var numRects = 1; //try a high sampling rate (128) with 1 rect for a realistic 2d effect,
+var numRects = 6; //try a high sampling rate (128) with 1 rect for a realistic 2d effect,
                    //or a lot of rects (30-60) with a low sampling rate (~16) for a 3d candle-like effect
 var numPoints = numRects*6;
 
@@ -83,6 +83,7 @@ function createNoiseTexture(size, frequency, octaves, time)
   // The property 'data' will contain an array of int8
   var data=imageData.data;
   let delta = (1.0 / size);
+  let base = 0;
   for(let r = 0; r < numRects; r++){
     let degree = r*180.0/numRects;
     for (let i = 0; i < size; ++i)
@@ -91,15 +92,15 @@ function createNoiseTexture(size, frequency, octaves, time)
       for (let j = 0; j < size; ++j)
       {
         let y = j * delta;
-        let base = (r+i) * size + j;
+        base = r*size*size + i*size + j;
         let nn = 0.0;
         let f = frequency;
         octaves = 4;
         for (let k = 0; k < octaves; ++k)
         {
-          nn += noiseMaker.noise4((x * f + (time*riseSpeed*f))*Math.cos(toRadians(degree)),
+          nn += noiseMaker.noise4((x + (time*riseSpeed))*Math.cos(toRadians(degree))*f,
                                    y * f, 
-                                  (x * f + (time*riseSpeed*f))*Math.sin(toRadians(degree)),
+                                  (x + (time*riseSpeed))*Math.sin(toRadians(degree))*f,
                                    time*turbSpeed) / f;
           // values appear to be about +/- .27, so scale appropriately
           // to store as a color value in [0, 255]
@@ -124,6 +125,12 @@ function createNoiseTexture(size, frequency, octaves, time)
 var vertices = [];
 for(let i = 0; i < numRects; i++){
   let degree = (180.0/numRects)*i
+  //vertices.push(0.0 + i, -0.5, 0.0);
+  //vertices.push(1.0 + i, -0.5, 0.0);
+  //vertices.push(1.0 + i, 0.5, 0.0);
+  //vertices.push(0.0 + i, -0.5, 0.0);
+  //vertices.push(1.0 + i, 0.5, 0.0);
+  //vertices.push(0.0 + i, 0.5, 0.0);
   vertices.push(-0.5*Math.cos(toRadians(degree)), -0.5, 0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), -0.5, -0.5*Math.sin(toRadians(degree)));
   vertices.push(0.5*Math.cos(toRadians(degree)), 0.5, -0.5*Math.sin(toRadians(degree)));
@@ -146,12 +153,12 @@ fireCoords = new Float32Array(fireCoords);
 
 var noiseCoords = [];
 for(let i = 0; i < numRects; i++){
-  noiseCoords.push(0.0, i/numRects);
-  noiseCoords.push(1.0, i/numRects);
-  noiseCoords.push(1.0, (1.0+i)/numRects);
-  noiseCoords.push(0.0, i/numRects);
-  noiseCoords.push(1.0, (1.0+i)/numRects);
-  noiseCoords.push(0.0, (1.0+i)/numRects);
+  noiseCoords.push(0.0, i);
+  noiseCoords.push(1.0, i);
+  noiseCoords.push(1.0, (1.0+i));
+  noiseCoords.push(0.0, i);
+  noiseCoords.push(1.0, (1.0+i));
+  noiseCoords.push(0.0, (1.0+i));
 }
 noiseCoords = new Float32Array(noiseCoords);
 
@@ -293,6 +300,11 @@ async function main(image) {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
   // load and compile the shader pair
   shader = createShaderProgram(gl, vshaderSource, fshaderSource);
 
@@ -314,6 +326,18 @@ async function main(image) {
   const freqInput = document.getElementById('frequency')
   freqInput.addEventListener('change', event => {
     frequency = Number(event.target.value)
+  })
+  const riseInput = document.getElementById('riseSpeed')
+  riseInput.addEventListener('change', event => {
+    riseSpeed = Number(event.target.value)/100.0;
+  })
+  const turbInput = document.getElementById('turbSpeed')
+  turbInput.addEventListener('change', event => {
+    turbSpeed = Number(event.target.value)/100.0;
+  })
+  const rectInput = document.getElementById('numRects')
+  rectInput.addEventListener('change', event => {
+    numRects = Number(event.target.value)/100.0;
   })
   // define an animation loop
   var animate = function() {

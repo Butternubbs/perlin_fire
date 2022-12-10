@@ -10,10 +10,23 @@
 <body>
 	<canvas id="theCanvas" width="600" height="600">
     Please use a browser that supports "canvas"
-    </canvas>
+    </canvas><br>
+    <p>Frequency</p>
     <input type="range" id="frequency" name="frequency"
-           value="4"
-           min="0" max="50">
+            value="4"
+            min="0" max="16">
+    <p>Rise Speed</p>
+    <input type="range" id="riseSpeed" name="riseSpeed"
+            value="2"
+            min="0" max="20">
+    <p>Turbulence Speed</p>
+    <input type="range" id="turbSpeed" name="turbSpeed"
+            value="5"
+            min="0" max="20">
+    <p>Break the textures</p>
+    <input type="range" id="numRects" name="numRects"
+            value="5"
+            min="0" max="20">
 <script src="../three/three.js"></script>
 <script src="../util/cs336util.js"></script>
 <script src="../hierarchy/CS336Object.js"></script>
